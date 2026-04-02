@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6-Angle Tool Signature Simulator - Material Selection</title>
+    <!-- Load React, ReactDOM, and Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* บังคับไม่ให้เกิด Scrollbar และกำหนดความสูงเต็มจอพอดี */
+        body { 
+            font-family: 'Sarabun', sans-serif; 
+            background-color: #f8fafc; 
+            margin: 0; 
+            padding: 0; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+        /* ปรับขนาด Slider ให้กะทัดรัดขึ้น */
+        .slider-range {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            background: #cbd5e1;
+            outline: none;
+            margin-top: 6px;
+            margin-bottom: 2px;
+        }
+        .slider-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .slider-range::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        
+        .thumb-blue::-webkit-slider-thumb { background: #3b82f6; }
+        .thumb-emerald::-webkit-slider-thumb { background: #10b981; }
+        .thumb-indigo::-webkit-slider-thumb { background: #6366f1; }
+        .thumb-teal::-webkit-slider-thumb { background: #14b8a6; }
+        .thumb-orange::-webkit-slider-thumb { background: #f97316; }
+        .thumb-purple::-webkit-slider-thumb { background: #a855f7; }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div id="root" class="h-full"></div>
+
+    <script type="text/babel">
+
+        // --- Data: Recommended Angles based on Material ---
+        // Format: [min, max]
+        const materialData = {
+            "mild_steel": {
+                name: "เหล็กกล้าคาร์บอนต่ำ (Mild Steel)",
+                hss: { br: [8, 15], sr: [10, 14], er: [8, 10], sr_rel: [8, 10], ec: [8, 15], sc: [15, 20] },
+                carbide: { br: [-5, 0], sr: [-5, 5], er: [5, 8], sr_rel: [5, 8], ec: [5, 15], sc: [15, 15] }
+            },
+            "alloy_steel": {
+                name: "เหล็กกล้าผสม/เหนียว (Alloy Steel)",
+                hss: { br: [5, 10], sr: [8, 12], er: [6, 8], sr_rel: [6, 8], ec: [8, 10], sc: [15, 15] },
+                carbide: { br: [-5, -5], sr: [-5, 0], er: [5, 7], sr_rel: [5, 7], ec: [5, 10], sc: [15, 20] }
+            },
+            "cast_iron": {
+                name: "เหล็กหล่อ (Cast Iron)",
+                hss: { br: [0, 5], sr: [5, 10], er: [5, 8], sr_rel: [5, 8], ec: [5, 10], sc: [10, 15] },
+                carbide: { br: [-5, 0], sr: [-5, 0], er: [5, 8], sr_rel: [5, 8], ec: [5, 15], sc: [15, 15] }
+            },
+            "aluminum": {
+                name: "อลูมิเนียม (Aluminum)",
+                hss: { br: [15, 30], sr: [15, 20], er: [10, 15], sr_rel: [10, 15], ec: [10, 15], sc: [10, 15] },
+                carbide: { br: [0, 10], sr: [5, 15], er: [6, 10], sr_rel: [6, 10], ec: [5, 10], sc: [10, 15] }
+            },
+            "brass": {
+                name: "ทองเหลือง (Brass/Bronze)",
+                hss: { br: [0, 0], sr: [0, 5], er: [8, 10], sr_rel: [8, 10], ec: [8, 10], sc: [10, 15] },
+                carbide: { br: [0, 0], sr: [0, 0], er: [6, 8], sr_rel: [6, 8], ec: [5, 10], sc: [10, 15] }
+            }
+        };
+
+        // --- Helper functions for SVG Math ---
+        const polarToCartesian = (centerX, centerY, radius, angleInDegrees) => {
+            const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
+            return {
+                x: centerX + (radius * Math.cos(angleInRadians)),
+                y: centerY + (radius * Math.sin(angleInRadians))
+            };
+        };
+
+        const describeArc = (x, y, radius, startAngle, endAngle) => {
+            const start = polarToCartesian(x, y, radius, startAngle);
+            const end = polarToCartesian(x, y, radius, endAngle);
+            const largeArcFlag = Math.abs(endAngle - startAngle) <= 180 ? "0" : "1";
+            const sweepFlag = endAngle > startAngle ? "1" : "0";
+            return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
+        };
+
+        // --- Reusable Component for Each View ---
+        const ToolView = ({ 
+            title, desc, 
+            a1Name, a1Sym, a1Val, setA1, a1Min, a1Max, c1, colorTheme1, a1Rec,
+            a2Name, a2Sym, a2Val, setA2, a2Min, a2Max, c2, colorTheme2, a2Rec,
+            isTopView,
+            flipX = false,
+            workpieceType 
+        }) => {
+            // ขนาดของกราฟิก
+            const cx = 160;
+            const cy = isTopView ? 160 : 140;
+            const L = 120; 
+            const H = 120;
+            const dir = flipX ? -1 : 1;
+
+            // คำนวณจุดปลายของมีด
+            const ex1 = cx + dir * L;
+            const ey1 = cy + (L * Math.tan(a1Val * Math.PI / 180));
+            const ex2 = cx + dir * (H * Math.tan(a2Val * Math.PI / 180));
+            const ey2 = cy + H;
+
+            // เส้นโค้งบอกมุม A1
+            const start1 = flipX ? 180 : 0;
+            const end1 = flipX ? 180 - a1Val : a1Val;
+            const arc1Path = describeArc(cx, cy, 60, start1, end1);
+            const arc1LabelPos = polarToCartesian(cx, cy, 80, flipX ? 180 - (a1Val / 2) : a1Val / 2);
+
+            // เส้นโค้งบอกมุม A2
+            const start2 = 90;
+            const end2 = flipX ? 90 + a2Val : 90 - a2Val;
+            const arc2Path = describeArc(cx, cy, 80, start2, end2);
+            const arc2LabelPos = polarToCartesian(cx, cy, 100, flipX ? 90 + (a2Val / 2) : 90 - (a2Val / 2));
+
+            // มุมภายใน (Wedge / Point Angle)
+            const internalAngleVal = 90 - a1Val - a2Val;
+            let internalStart, internalEnd;
+            if (isTopView) {
+                internalStart = a1Val;
+                internalEnd = 90 - a2Val;
+            } else if (flipX) {
+                internalStart = 90 + a2Val;
+                internalEnd = 180 - a1Val;
+            } else {
+                internalStart = a1Val;
+                internalEnd = 90 - a2Val;
+            }
+            const internalPath = describeArc(cx, cy, 45, internalStart, internalEnd);
+            const internalLabelPos = polarToCartesian(cx, cy, 28, (internalStart + internalEnd) / 2);
+            const internalName = isTopView ? "มุมปลายมีด (Point Angle)" : "มุมตัด/มุมลิ่ม (Wedge)";
+            const internalSym = isTopView ? "ε" : "β";
+            const internalColor = isTopView ? "#ca8a04" : "#ea580c";
+            const internalBg = isTopView ? "bg-yellow-50 border-yellow-200" : "bg-orange-50 border-orange-200";
+            const internalText = isTopView ? "text-yellow-800" : "text-orange-800";
+            const internalValColor = isTopView ? "text-yellow-600" : "text-orange-600";
+
+            // ฟังก์ชันสำหรับแสดง Text ของค่าแนะนำ
+            const renderRecText = (rec) => {
+                if (!rec) return null;
+                const text = rec[0] === rec[1] ? `${rec[0]}°` : `${rec[0]} ถึง ${rec[1]}°`;
+                return <div className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">แนะนำ: {text}</div>;
+            };
+
+            // ตรวจสอบว่าค่าปัจจุบันอยู่ในช่วงแนะนำหรือไม่
+            const isA1InRec = a1Val >= a1Rec[0] && a1Val <= a1Rec[1];
+            const isA2InRec = a2Val >= a2Rec[0] && a2Val <= a2Rec[1];
+
+            return (
+                <div className="bg-white rounded-xl shadow border border-slate-100 flex flex-col h-full overflow-hidden">
+                    {/* Header */}
+                    <div className="bg-slate-50 p-2 md:p-3 border-b border-slate-100 flex-shrink-0">
+                        <h3 className="text-sm md:text-base font-bold text-slate-800 leading-tight">{title}</h3>
+                        <p className="text-[10px] md:text-xs text-slate-500 leading-tight mt-0.5 truncate">{desc}</p>
+                    </div>
+
+                    {/* SVG Canvas */}
+                    <div className="relative w-full flex-grow bg-slate-50 border-b border-slate-100 flex justify-center items-center overflow-hidden min-h-0 p-1">
+                        <svg viewBox="0 0 320 280" className="w-full h-full max-h-full drop-shadow-md">
+                            <defs>
+                                <linearGradient id={`grad-${a1Sym}`} x1={flipX ? "1" : "0"} y1="0" x2={flipX ? "0" : "1"} y2="1">
+                                    <stop offset="0%" stopColor={isTopView ? "#e2e8f0" : "#cbd5e1"} />
+                                    <stop offset="100%" stopColor={isTopView ? "#94a3b8" : "#64748b"} />
+                                </linearGradient>
+                                <linearGradient id="workGrad" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stopColor="#fcd34d" />
+                                    <stop offset="100%" stopColor="#d97706" />
+                                </linearGradient>
+                                <linearGradient id="workGradTop" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#fcd34d" />
+                                    <stop offset="100%" stopColor="#d97706" />
+                                </linearGradient>
+                                <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309" />
+                                </marker>
+                            </defs>
+                            
+                            {/* Workpiece Graphics */}
+                            {workpieceType === 'circle' && (
+                                <g opacity="0.9">
+                                    <circle cx={cx - 70} cy={cy} r="70" fill="url(#workGrad)" stroke="#b45309" strokeWidth="2" />
+                                    <circle cx={cx - 70} cy={cy} r="3" fill="#78350f" />
+                                    <line x1={cx - 150} y1={cy} x2={cx} y2={cy} stroke="#b45309" strokeWidth="1" strokeDasharray="3,3" />
+                                    <line x1={cx - 70} y1={cy - 80} x2={cx - 70} y2={cy + 80} stroke="#b45309" strokeWidth="1" strokeDasharray="3,3" />
+                                    <text x={cx - 70} y={cy - 20} fill="#78350f" fontSize="16" fontWeight="bold" textAnchor="middle">ชิ้นงาน</text>
+                                    <path d={`M ${cx - 120} ${cy - 40} A 50 50 0 0 1 ${cx - 35} ${cy - 50}`} fill="none" stroke="#b45309" strokeWidth="2" strokeDasharray="4,4" markerEnd="url(#arrow)" />
+                                </g>
+                            )}
+                            {workpieceType === 'top-cylinder' && (
+                                <g opacity="0.9">
+                                    <rect x="0" y={cy - 110} width={cx} height="110" fill="url(#workGradTop)" stroke="#b45309" strokeWidth="2" />
+                                    <text x={cx / 2} y={cy - 50} fill="#78350f" fontSize="16" fontWeight="bold" textAnchor="middle">ชิ้นงาน</text>
+                                    <line x1="0" y1={cy} x2={cx} y2={cy} stroke="#b45309" strokeWidth="2" strokeDasharray="4,4" />
+                                    <line x1="0" y1={cy - 55} x2={cx} y2={cy - 55} stroke="#78350f" strokeWidth="1" strokeDasharray="8,4" />
+                                </g>
+                            )}
+                            {workpieceType === 'front-face' && (
+                                <g>
+                                    <rect x={cx} y={cy - 90} width={320 - cx} height="180" fill="url(#workGradTop)" fillOpacity="0.25" stroke="#b45309" strokeWidth="2" strokeDasharray="5,5" />
+                                    <text x={cx + (320 - cx)/2} y={cy - 60} fill="#78350f" fontSize="16" fontWeight="bold" textAnchor="middle" opacity="0.9">ชิ้นงาน</text>
+                                    <line x1={cx} y1={cy - 90} x2={cx} y2={cy + 90} stroke="#b45309" strokeWidth="2" />
+                                    <line x1={cx} y1={cy} x2="320" y2={cy} stroke="#78350f" strokeWidth="1" strokeDasharray="8,4" />
+                                </g>
+                            )}
+
+                            {/* Reference Lines */}
+                            <line x1={cx - dir*30} y1={cy} x2={cx + dir*(L + 20)} y2={cy} stroke="#cbd5e1" strokeWidth="2" strokeDasharray="5,5" />
+                            <line x1={cx} y1={cy - 30} x2={cx} y2={cy + H + 20} stroke="#cbd5e1" strokeWidth="2" strokeDasharray="5,5" />
+
+                            {/* Tool Body */}
+                            <path d={`M ${cx} ${cy} L ${ex1} ${ey1} L ${ex1} ${cy+H} L ${ex2} ${ey2} Z`} fill={`url(#grad-${a1Sym})`} stroke="#334155" strokeWidth="3" />
+                            
+                            {/* Angles */}
+                            <path d={arc1Path} fill="none" stroke={c1} strokeWidth="3" />
+                            <circle cx={arc1LabelPos.x} cy={arc1LabelPos.y} r="14" fill="#fff" stroke={c1} strokeWidth="2" />
+                            <text x={arc1LabelPos.x} y={arc1LabelPos.y + 4} fill={c1} fontSize="12" fontWeight="bold" textAnchor="middle">{a1Sym}</text>
+
+                            <path d={arc2Path} fill="none" stroke={c2} strokeWidth="3" />
+                            <circle cx={arc2LabelPos.x} cy={arc2LabelPos.y} r="14" fill="#fff" stroke={c2} strokeWidth="2" />
+                            <text x={arc2LabelPos.x} y={arc2LabelPos.y + 4} fill={c2} fontSize="12" fontWeight="bold" textAnchor="middle">{a2Sym}</text>
+
+                            {/* Internal Wedge Angle */}
+                            <path d={internalPath} fill="none" stroke={internalColor} strokeWidth="3" />
+                            <circle cx={internalLabelPos.x} cy={internalLabelPos.y} r="10" fill="#fff" stroke={internalColor} strokeWidth="1.5" />
+                            <text x={internalLabelPos.x} y={internalLabelPos.y + 3} fill={internalColor} fontSize="10" fontWeight="bold" textAnchor="middle">{internalSym}</text>
+
+                            {/* Tool Point */}
+                            <circle cx={cx} cy={cy} r="5" fill="#ef4444" />
+                        </svg>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="p-3 md:p-4 flex-shrink-0 flex flex-col bg-white">
+                        <div className="space-y-3">
+                            {/* Angle 1 Control */}
+                            <div>
+                                <div className="flex justify-between items-start mb-1">
+                                    <label className="font-semibold text-xs md:text-sm flex items-center gap-1.5" style={{color: c1}}>
+                                        <span className="inline-block w-4 h-4 rounded text-white text-center text-[10px] leading-4" style={{backgroundColor: c1}}>{a1Sym}</span>
+                                        {a1Name}
+                                    </label>
+                                    <div className="text-right">
+                                        <span className={`font-bold text-sm md:text-base ${isA1InRec ? '' : 'text-red-500'}`} style={{color: isA1InRec ? c1 : undefined}}>{a1Val}°</span>
+                                        {renderRecText(a1Rec)}
+                                    </div>
+                                </div>
+                                <input type="range" min={a1Min} max={a1Max} value={a1Val} onChange={(e) => setA1(Number(e.target.value))} className={`slider-range thumb-${colorTheme1}`} />
+                            </div>
+                            {/* Angle 2 Control */}
+                            <div>
+                                <div className="flex justify-between items-start mb-1">
+                                    <label className="font-semibold text-xs md:text-sm flex items-center gap-1.5" style={{color: c2}}>
+                                        <span className="inline-block w-4 h-4 rounded text-white text-center text-[10px] leading-4" style={{backgroundColor: c2}}>{a2Sym}</span>
+                                        {a2Name}
+                                    </label>
+                                    <div className="text-right">
+                                        <span className={`font-bold text-sm md:text-base ${isA2InRec ? '' : 'text-red-500'}`} style={{color: isA2InRec ? c2 : undefined}}>{a2Val}°</span>
+                                        {renderRecText(a2Rec)}
+                                    </div>
+                                </div>
+                                <input type="range" min={a2Min} max={a2Max} value={a2Val} onChange={(e) => setA2(Number(e.target.value))} className={`slider-range thumb-${colorTheme2}`} />
+                            </div>
+                        </div>
+
+                        {/* Internal Angle Summary */}
+                        <div className={`mt-3 pt-2 flex justify-between items-center ${internalBg} px-3 py-1.5 md:py-2 rounded shadow-sm border`}>
+                            <label className={`font-semibold text-xs flex items-center gap-1.5 ${internalText}`}>
+                                <span className="inline-block w-4 h-4 rounded text-white text-center text-[10px] leading-4" style={{backgroundColor: internalColor}}>{internalSym}</span>
+                                {internalName}
+                            </label>
+                            <span className={`font-bold text-sm md:text-base ${internalValColor}`}>{internalAngleVal}°</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            // Material States
+            const [workMat, setWorkMat] = React.useState('mild_steel');
+            const [toolMat, setToolMat] = React.useState('hss');
+
+            // Angle States
+            const [backRake, setBackRake] = React.useState(8);
+            const [sideRake, setSideRake] = React.useState(14);
+            const [endRelief, setEndRelief] = React.useState(8);
+            const [sideRelief, setSideRelief] = React.useState(8);
+            const [endCut, setEndCut] = React.useState(8);
+            const [sideCut, setSideCut] = React.useState(15);
+
+            // Get Current Recommendations based on selection
+            const recs = materialData[workMat][toolMat];
+
+            // Function to apply average recommended values
+            const applyRecommendations = () => {
+                const getAvg = (arr) => Math.round((arr[0] + arr[1]) / 2);
+                setBackRake(getAvg(recs.br));
+                setSideRake(getAvg(recs.sr));
+                setEndRelief(getAvg(recs.er));
+                setSideRelief(getAvg(recs.sr_rel));
+                setEndCut(getAvg(recs.ec));
+                setSideCut(getAvg(recs.sc));
+            };
+
+            return (
+                <div className="h-full flex flex-col p-2 md:p-4 max-w-[1600px] mx-auto">
+                    {/* Header Fixed Size */}
+                    <header className="mb-2 text-center flex-shrink-0">
+                        <h1 className="text-xl md:text-2xl font-black text-slate-800 mb-1">เครื่องมือวิเคราะห์มีดกลึง 6 มุม (Tool Signature)</h1>
+                        
+                        {/* Control Bar สำหรับเลือกวัสดุ */}
+                        <div className="flex flex-wrap justify-center items-center gap-2 md:gap-4 mt-2 bg-slate-100 p-2 rounded-lg inline-flex mx-auto border border-slate-200 shadow-sm">
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs md:text-sm font-semibold text-slate-700">วัสดุงาน:</label>
+                                <select 
+                                    className="text-xs md:text-sm p-1 md:p-1.5 rounded border-slate-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    value={workMat} 
+                                    onChange={(e) => setWorkMat(e.target.value)}
+                                >
+                                    {Object.entries(materialData).map(([key, data]) => (
+                                        <option key={key} value={key}>{data.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs md:text-sm font-semibold text-slate-700">วัสดุมีด:</label>
+                                <select 
+                                    className="text-xs md:text-sm p-1 md:p-1.5 rounded border-slate-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    value={toolMat} 
+                                    onChange={(e) => setToolMat(e.target.value)}
+                                >
+                                    <option value="hss">เหล็กกล้ารอบสูง (HSS)</option>
+                                    <option value="carbide">คาร์ไบด์ (Carbide)</option>
+                                </select>
+                            </div>
+
+                            <button 
+                                onClick={applyRecommendations}
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold py-1.5 px-3 rounded shadow-sm transition-colors flex items-center gap-1"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                ปรับตามค่ามาตรฐาน
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Master Grid - Flexible Height */}
+                    <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 min-h-0">
+                        <ToolView 
+                            title="1. ภาพฉายด้านข้าง (Side View)"
+                            desc="มุมคายที่ดึงเศษไปด้านหลัง และมุมหลบกันท้องมีดถูชิ้นงาน"
+                            a1Name="มุมคายหลัง (Back Rake)" a1Sym="αb" a1Val={backRake} setA1={setBackRake} a1Min={-10} a1Max={30} c1="#2563eb" colorTheme1="blue" a1Rec={recs.br}
+                            a2Name="มุมหลบหน้า (End Relief)" a2Sym="θe" a2Val={endRelief} setA2={setEndRelief} a2Min={0} a2Max={25} c2="#059669" colorTheme2="emerald" a2Rec={recs.er}
+                            workpieceType="circle"
+                        />
+                        <ToolView 
+                            title="2. ภาพฉายด้านหน้า (Front View)"
+                            desc="มุมหลักที่รับแรงปะทะ (คายข้าง) และมุมหลบข้าง"
+                            a1Name="มุมคายข้าง (Side Rake)" a1Sym="αs" a1Val={sideRake} setA1={setSideRake} a1Min={-10} a1Max={30} c1="#4f46e5" colorTheme1="indigo" a1Rec={recs.sr}
+                            a2Name="มุมหลบข้าง (Side Relief)" a2Sym="θs" a2Val={sideRelief} setA2={setSideRelief} a2Min={0} a2Max={25} c2="#0d9488" colorTheme2="teal" a2Rec={recs.sr_rel}
+                            flipX={true}
+                            workpieceType="front-face"
+                        />
+                        <ToolView 
+                            title="3. ภาพฉายด้านบน (Top View)"
+                            desc="ทิศทางการเข้าปะทะชิ้นงาน และกระจายความร้อนปลายมีด"
+                            a1Name="มุมขอบตัดหน้า (End Cut)" a1Sym="Ce" a1Val={endCut} setA1={setEndCut} a1Min={5} a1Max={30} c1="#ea580c" colorTheme1="orange" a1Rec={recs.ec}
+                            a2Name="มุมขอบตัดข้าง (Side Cut)" a2Sym="Cs" a2Val={sideCut} setA2={setSideCut} a2Min={0} a2Max={45} c2="#9333ea" colorTheme2="purple" a2Rec={recs.sc}
+                            isTopView={true}
+                            workpieceType="top-cylinder"
+                        />
+                    </div>
+
+                    {/* Signature Summary - Fixed Size */}
+                    <div className="mt-2 md:mt-3 bg-slate-800 rounded-xl p-3 flex-shrink-0 flex flex-col justify-center text-center shadow-xl relative">
+                        <h4 className="text-slate-400 text-[10px] md:text-xs font-semibold uppercase tracking-widest mb-1">สัญลักษณ์เครื่องมือตัดปัจจุบัน (ASA Tool Signature)</h4>
+                        <div className="flex flex-wrap justify-center items-center gap-1.5 md:gap-3 text-lg md:text-2xl font-black font-mono text-white">
+                            <span className="text-blue-400" title="Back Rake">{backRake}°</span> ,
+                            <span className="text-indigo-400" title="Side Rake">{sideRake}°</span> ,
+                            <span className="text-emerald-400" title="End Relief">{endRelief}°</span> ,
+                            <span className="text-teal-400" title="Side Relief">{sideRelief}°</span> ,
+                            <span className="text-orange-400" title="End Cutting Edge">{endCut}°</span> ,
+                            <span className="text-purple-400" title="Side Cutting Edge">{sideCut}°</span> 
+                        </div>
+                        <p className="text-slate-400 text-[9px] md:text-[10px] mt-1">ลำดับ: αb (Back Rake) - αs (Side Rake) - θe (End Relief) - θs (Side Relief) - Ce (End Cut) - Cs (Side Cut)</p>
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
