@@ -13,14 +13,15 @@
     <!-- Font -->
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* บังคับไม่ให้เกิด Scrollbar และกำหนดความสูงเต็มจอพอดี */
+        /* อนุญาตให้เกิด Scrollbar สำหรับการใช้งานบนมือถือ และให้มีความสูงขั้นต่ำเต็มหน้าจอ */
         body { 
             font-family: 'Sarabun', sans-serif; 
             background-color: #f8fafc; 
             margin: 0; 
             padding: 0; 
-            height: 100vh; 
-            overflow: hidden; 
+            min-height: 100vh; 
+            overflow-x: hidden;
+            overflow-y: auto; 
         }
         /* ปรับขนาด Slider ให้กะทัดรัดขึ้น */
         .slider-range {
@@ -54,7 +55,7 @@
 </head>
 <body class="text-slate-800">
 
-    <div id="root" class="h-full"></div>
+    <div id="root"></div>
 
     <script type="text/babel">
 
@@ -177,11 +178,11 @@
                     {/* Header */}
                     <div className="bg-slate-50 p-2 md:p-3 border-b border-slate-100 flex-shrink-0">
                         <h3 className="text-sm md:text-base font-bold text-slate-800 leading-tight">{title}</h3>
-                        <p className="text-[10px] md:text-xs text-slate-500 leading-tight mt-0.5 truncate">{desc}</p>
+                        <p className="text-[10px] md:text-xs text-slate-500 leading-tight mt-0.5 line-clamp-2 md:truncate">{desc}</p>
                     </div>
 
-                    {/* SVG Canvas */}
-                    <div className="relative w-full flex-grow bg-slate-50 border-b border-slate-100 flex justify-center items-center overflow-hidden min-h-0 p-1">
+                    {/* SVG Canvas - กำหนดความสูงแบบ Fixed บนมือถือ (h-[220px]) ป้องกันการโดนบีบแบน */}
+                    <div className="relative w-full h-[220px] md:h-auto md:flex-grow bg-slate-50 border-b border-slate-100 flex justify-center items-center overflow-hidden min-h-0 p-1">
                         <svg viewBox="0 0 320 280" className="w-full h-full max-h-full drop-shadow-md">
                             <defs>
                                 <linearGradient id={`grad-${a1Sym}`} x1={flipX ? "1" : "0"} y1="0" x2={flipX ? "0" : "1"} y2="1">
@@ -329,17 +330,17 @@
             };
 
             return (
-                <div className="h-full flex flex-col p-2 md:p-4 max-w-[1600px] mx-auto">
+                <div className="min-h-screen flex flex-col p-2 md:p-4 max-w-[1600px] mx-auto pb-8 md:pb-4">
                     {/* Header Fixed Size */}
                     <header className="mb-2 text-center flex-shrink-0">
                         <h1 className="text-xl md:text-2xl font-black text-slate-800 mb-1">เครื่องมือวิเคราะห์มีดกลึง 6 มุม (Tool Signature)</h1>
                         
-                        {/* Control Bar สำหรับเลือกวัสดุ */}
-                        <div className="flex flex-wrap justify-center items-center gap-2 md:gap-4 mt-2 bg-slate-100 p-2 rounded-lg inline-flex mx-auto border border-slate-200 shadow-sm">
-                            <div className="flex items-center gap-2">
+                        {/* Control Bar สำหรับเลือกวัสดุ (Responsive Layout) */}
+                        <div className="flex flex-col md:flex-row justify-center items-stretch md:items-center gap-2 md:gap-4 mt-2 bg-slate-100 p-2 md:p-3 rounded-lg w-full max-w-2xl mx-auto border border-slate-200 shadow-sm">
+                            <div className="flex items-center gap-2 justify-between md:justify-start">
                                 <label className="text-xs md:text-sm font-semibold text-slate-700">วัสดุงาน:</label>
                                 <select 
-                                    className="text-xs md:text-sm p-1 md:p-1.5 rounded border-slate-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    className="text-xs md:text-sm p-1.5 rounded border-slate-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 flex-grow md:flex-grow-0 bg-white"
                                     value={workMat} 
                                     onChange={(e) => setWorkMat(e.target.value)}
                                 >
@@ -349,10 +350,10 @@
                                 </select>
                             </div>
                             
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 justify-between md:justify-start">
                                 <label className="text-xs md:text-sm font-semibold text-slate-700">วัสดุมีด:</label>
                                 <select 
-                                    className="text-xs md:text-sm p-1 md:p-1.5 rounded border-slate-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    className="text-xs md:text-sm p-1.5 rounded border-slate-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 flex-grow md:flex-grow-0 bg-white"
                                     value={toolMat} 
                                     onChange={(e) => setToolMat(e.target.value)}
                                 >
@@ -363,7 +364,7 @@
 
                             <button 
                                 onClick={applyRecommendations}
-                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold py-1.5 px-3 rounded shadow-sm transition-colors flex items-center gap-1"
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold py-2 px-3 rounded shadow-sm transition-colors flex items-center justify-center gap-1 mt-1 md:mt-0"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -374,7 +375,7 @@
                     </header>
 
                     {/* Master Grid - Flexible Height */}
-                    <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 min-h-0">
+                    <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 min-h-0 mt-2 md:mt-0">
                         <ToolView 
                             title="1. ภาพฉายด้านข้าง (Side View)"
                             desc="มุมคายที่ดึงเศษไปด้านหลัง และมุมหลบกันท้องมีดถูชิ้นงาน"
